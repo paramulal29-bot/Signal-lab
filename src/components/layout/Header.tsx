@@ -1,4 +1,5 @@
 import { Activity } from 'lucide-react'
+import { DATA_MODE } from '../../core/config'
 
 const NAV_LINKS = [
   { href: '#markets', label: 'Markets' },
@@ -20,7 +21,7 @@ export function Header() {
             Signal<span className="text-purple-400">Lab</span>
           </span>
           <span className="hidden rounded-full border border-wait/40 bg-wait/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-wait sm:inline">
-            Demo
+            {DATA_MODE === 'SIMULATED' ? 'Demo' : 'Live'}
           </span>
         </a>
 

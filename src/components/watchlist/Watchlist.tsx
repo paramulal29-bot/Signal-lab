@@ -53,7 +53,7 @@ export function Watchlist({ markets, watched, onToggle }: WatchlistProps) {
                 </p>
               </div>
 
-              <SignalBadge action={m.latestSignal.action} className="ml-1" />
+              <SignalBadge action={m.currentSignal.action} className="ml-1" />
             </li>
           )
         })}
