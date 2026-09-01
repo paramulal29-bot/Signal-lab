@@ -1,14 +1,39 @@
 @import "tailwindcss";
 
+/**
+ * SignalLab instrument theme.
+ *
+ * Reference points: precision chronographs, aircraft instrumentation,
+ * professional trading terminals. Deliberately NOT a generic AI SaaS
+ * dashboard — no purple gradients, no glassmorphism, no decorative
+ * glow. Color is used to convey state, never for decoration.
+ */
 @theme {
-  --color-bg: #0b0e14;
-  --color-surface: #12161f;
-  --color-surface-alt: #171c28;
-  --color-border: #232838;
-  --color-buy: #22c55e;
-  --color-sell: #ef4444;
-  --color-wait: #eab308;
+  /* Instrument panel surfaces — near-black, cool, matte. */
+  --color-panel-0: #07090c;
+  --color-panel-1: #0c1016;
+  --color-panel-2: #11161e;
+  --color-panel-3: #171d27;
+
+  /* Hairline rules, as on an instrument bezel. */
+  --color-rule: #1f2733;
+  --color-rule-bright: #2c3746;
+
+  /* Text */
+  --color-ink: #e8ecf1;
+  --color-ink-dim: #93a0b1;
+  --color-ink-faint: #5d6b7d;
+
+  /* State colors. Each is always paired with a text label in the UI,
+     never used as the only signal of meaning (accessibility §33). */
+  --color-long: #2ea36a;
+  --color-short: #d0453d;
+  --color-hold: #c08a2e;
+  --color-instrument: #4a90b8;
+  --color-live: #2ea36a;
+
   --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 }
 
 html {
@@ -17,9 +42,26 @@ html {
 
 body {
   margin: 0;
-  background: var(--color-bg);
-  color: #e5e7eb;
+  background: var(--color-panel-0);
+  color: var(--color-ink);
   font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* All numeric readouts are monospaced and tabular so digits do not
+   jitter as values tick — the way a real instrument behaves. */
+.tabular {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+/* Small technical labels used throughout the panels. */
+.label {
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-ink-faint);
 }
 
 ::-webkit-scrollbar {
@@ -28,10 +70,53 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--color-bg);
+  background: var(--color-panel-0);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--color-border);
+  background: var(--color-rule-bright);
   border-radius: 999px;
+}
+
+/* Focus ring for keyboard navigation (accessibility §33). */
+:focus-visible {
+  outline: 2px solid var(--color-instrument);
+  outline-offset: 2px;
+}
+
+/* The live-status pulse. Subtle: a slow breath, not a flash. */
+@keyframes instrument-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.pulse-live {
+  animation: instrument-pulse 2.4s ease-in-out infinite;
+}
+
+/* The chronograph's sweeping second indicator. */
+@keyframes sweep {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.sweep-hand {
+  animation: sweep 60s linear infinite;
+  transform-origin: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pulse-live,
+  .sweep-hand {
+    animation: none;
+  }
 }

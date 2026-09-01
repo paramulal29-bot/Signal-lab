@@ -1,59 +1,65 @@
+import { NavLink, Link } from 'react-router-dom'
 import { Activity } from 'lucide-react'
-import { DATA_MODE } from '../../core/config'
 
 const NAV_LINKS = [
-  { href: '#markets', label: 'Markets' },
-  { href: '#signals', label: 'Signals' },
-  { href: '#history', label: 'History' },
-  { href: '#watchlist', label: 'Watchlist' },
-  { href: '#pricing', label: 'Pricing' },
+  { to: '/academy', label: 'ACADEMY' },
+  { to: '/arena', label: 'PRACTICE ARENA' },
+  { to: '/performance', label: 'PERFORMANCE' },
+  { to: '/records', label: 'SIGNAL RECORD' },
+  { to: '/simulation', label: 'SIMULATION LAB' },
 ]
 
 export function Header() {
   return (
-    <header className="sticky top-0 z-30 border-b border-border bg-bg/90 backdrop-blur">
-      <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-4 sm:px-6">
-        <a href="#top" className="flex items-center gap-2">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-linear-to-br from-purple-500 to-blue-500">
-            <Activity className="h-4.5 w-4.5 text-white" />
+    <header className="sticky top-0 z-30 border-b border-rule bg-panel-0/95 backdrop-blur">
+      <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
+        <Link to="/" className="flex items-center gap-2.5">
+          <span className="flex h-7 w-7 items-center justify-center border border-rule-bright bg-panel-2">
+            <Activity className="h-4 w-4 text-instrument" aria-hidden />
           </span>
-          <span className="text-lg font-bold text-white">
-            Signal<span className="text-purple-400">Lab</span>
+          <span className="text-sm font-bold tracking-[0.16em] text-ink">SIGNALLAB</span>
+          <span className="hidden rounded-sm border border-rule-bright px-1.5 py-0.5 text-[9px] font-semibold tracking-[0.12em] text-ink-faint sm:inline">
+            TRAINING
           </span>
-          <span className="hidden rounded-full border border-wait/40 bg-wait/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-wait sm:inline">
-            {DATA_MODE === 'SIMULATED' ? 'Demo' : 'Live'}
-          </span>
-        </a>
+        </Link>
 
-        <nav className="hidden items-center gap-6 md:flex">
+        <nav className="hidden items-center gap-5 lg:flex">
           {NAV_LINKS.map((link) => (
-            <a
-              key={link.href}
-              href={link.href}
-              className="text-sm font-medium text-gray-400 transition-colors hover:text-white"
+            <NavLink
+              key={link.to}
+              to={link.to}
+              className={({ isActive }) =>
+                `text-[10px] font-semibold tracking-[0.14em] transition-colors ${
+                  isActive ? 'text-instrument' : 'text-ink-faint hover:text-ink'
+                }`
+              }
             >
               {link.label}
-            </a>
+            </NavLink>
           ))}
         </nav>
 
-        <a
-          href="#pricing"
-          className="rounded-lg bg-white px-3.5 py-2 text-sm font-semibold text-black transition-opacity hover:opacity-90"
+        <Link
+          to="/academy"
+          className="rounded-sm border border-long/50 bg-long/10 px-3 py-1.5 text-[10px] font-semibold tracking-[0.14em] text-long transition-colors hover:bg-long/20"
         >
-          Go Pro
-        </a>
+          START TRAINING
+        </Link>
       </div>
 
-      <nav className="flex items-center gap-4 overflow-x-auto border-t border-border px-4 py-2 md:hidden">
+      <nav className="flex items-center gap-4 overflow-x-auto border-t border-rule px-4 py-2 lg:hidden">
         {NAV_LINKS.map((link) => (
-          <a
-            key={link.href}
-            href={link.href}
-            className="whitespace-nowrap text-xs font-medium text-gray-400 hover:text-white"
+          <NavLink
+            key={link.to}
+            to={link.to}
+            className={({ isActive }) =>
+              `whitespace-nowrap text-[10px] font-semibold tracking-[0.12em] ${
+                isActive ? 'text-instrument' : 'text-ink-faint'
+              }`
+            }
           >
             {link.label}
-          </a>
+          </NavLink>
         ))}
       </nav>
     </header>
