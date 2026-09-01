@@ -10,7 +10,7 @@ import {
   ComposedChart,
 } from 'recharts'
 import type { AssetMarketData, AssetSymbol } from '../../core/types'
-import { FAST_PERIOD, SLOW_PERIOD } from '../../core/strategy'
+import { FAST_PERIOD, SLOW_PERIOD } from '../../core/strategies/smaCrossoverStrategy'
 import { sma } from '../../core/indicators'
 import { formatUsd } from '../../utils/format'
 import { Card } from '../common/Card'
@@ -132,7 +132,7 @@ export function MarketChart({ markets, selectedAsset, onSelectAsset }: MarketCha
                 <ReferenceDot
                   key={signal.id}
                   x={candles[signal.candleIndex].time}
-                  y={signal.entryPrice}
+                  y={(signal.entryZone.low + signal.entryZone.high) / 2}
                   r={5}
                   fill={signal.action === 'BUY' ? '#22c55e' : '#ef4444'}
                   stroke="#0b0e14"

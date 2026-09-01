@@ -1,8 +1,9 @@
-import { rollingVolatility, sma } from './indicators'
-import type { AssetSymbol, Candle, RiskLevel, Signal } from './types'
+import { rollingVolatility, sma } from '../indicators'
+import type { Candle, EntryZone, RiskLevel, Signal } from '../types'
+import type { Strategy, StrategyContext } from './Strategy'
 
 /**
- * The ONE strategy SignalLab v1 implements: a classic SMA crossover.
+ * The ONE strategy SignalLab implements: a classic SMA crossover.
  *
  *   - Fast SMA above Slow SMA, with enough separation -> BUY  (bullish trend)
  *   - Fast SMA below Slow SMA, with enough separation -> SELL (bearish trend)
@@ -10,8 +11,11 @@ import type { AssetSymbol, Candle, RiskLevel, Signal } from './types'
  *
  * This is intentionally simple. It is a starting point for learning how
  * a signal pipeline fits together, not a strategy anyone should trade
- * real money on.
+ * real money on. The "strength" score below measures how clearly
+ * separated the two averages are — it is a setup-clarity score, not a
+ * probability of winning.
  */
+export const STRATEGY_NAME = 'SMA Crossover (10/30)'
 export const FAST_PERIOD = 10
 export const SLOW_PERIOD = 30
 
@@ -28,46 +32,21 @@ function riskFromVolatility(vol: number | undefined): RiskLevel {
 function strengthFromSeparation(fast: number, slow: number, vol: number | undefined): number {
   const separationPct = Math.abs(fast - slow) / slow
   // Normalize against volatility so a "big" move on a calm asset still
-  // reads as strong, and scale into a 0-100 confidence score. Near-zero
-  // separation (the two averages sitting on top of each other) should
-  // score low, since that's exactly the "no clear trend" case.
+  // reads as strong, and scale into a 0-100 setup-clarity score. Near-zero
+  // separation (the two averages sitting on top of each other) scores
+  // low, since that's exactly the "no clear trend" case.
   const normalized = separationPct / Math.max(vol ?? 0.02, 0.005)
   const score = normalized * 170
   return Math.round(Math.min(96, Math.max(8, score)))
 }
 
-/** Reasoning for a discrete crossover event (used in signal history / chart markers). */
-function buildCrossoverReasoning(
-  action: 'BUY' | 'SELL',
-  fast: number,
-  slow: number,
-  risk: RiskLevel,
-  strength: number,
-): string {
-  const verb = action === 'BUY' ? 'crossed above' : 'crossed below'
-  const bias = action === 'BUY' ? 'bullish' : 'bearish'
-  return `Fast SMA(${FAST_PERIOD}) ${verb} Slow SMA(${SLOW_PERIOD}) ($${fast.toFixed(2)} vs $${slow.toFixed(2)}), signaling ${bias} momentum. Strength ${strength}/100 with ${risk.toLowerCase()} volatility.`
+/** A realistic price range a trade would be entered in, rather than one exact tick. */
+function buildEntryZone(price: number, vol: number | undefined): EntryZone {
+  const buffer = price * Math.max(vol ?? 0.02, 0.004) * 0.3
+  return { low: price - buffer, high: price + buffer }
 }
 
-/** Reasoning for the dashboard's "right now" signal card, which reflects the current trend state. */
-function buildCurrentReasoning(
-  action: 'BUY' | 'SELL' | 'WAIT',
-  fast: number,
-  slow: number,
-  risk: RiskLevel,
-  strength: number,
-): string {
-  const separationPct = (Math.abs(fast - slow) / slow) * 100
-  if (action === 'BUY') {
-    return `Fast SMA(${FAST_PERIOD}) is trading ${separationPct.toFixed(2)}% above Slow SMA(${SLOW_PERIOD}), a bullish trend. Confidence ${strength}/100 with ${risk.toLowerCase()} volatility.`
-  }
-  if (action === 'SELL') {
-    return `Fast SMA(${FAST_PERIOD}) is trading ${separationPct.toFixed(2)}% below Slow SMA(${SLOW_PERIOD}), a bearish trend. Confidence ${strength}/100 with ${risk.toLowerCase()} volatility.`
-  }
-  return `Fast SMA(${FAST_PERIOD}) and Slow SMA(${SLOW_PERIOD}) are only ${separationPct.toFixed(2)}% apart — too close for a confident trend call. Standing by for a clearer setup.`
-}
-
-function targetAndStop(
+function buildTargetAndStop(
   action: 'BUY' | 'SELL',
   entry: number,
   vol: number | undefined,
@@ -82,12 +61,38 @@ function targetAndStop(
   return { target: entry * (1 - movePct), stopLoss: entry * (1 + stopPct) }
 }
 
-/**
- * Runs the SMA crossover strategy over the full candle history and
- * returns every crossover event found, oldest first. Used both to draw
- * BUY/SELL markers on the chart and to feed the backtest engine.
- */
-export function computeCrossoverSignals(asset: AssetSymbol, candles: Candle[]): Signal[] {
+/** Reasoning for a discrete crossover event (chart markers / signal history). */
+function buildCrossoverReasoning(
+  action: 'BUY' | 'SELL',
+  fast: number,
+  slow: number,
+  risk: RiskLevel,
+  strength: number,
+): string {
+  const verb = action === 'BUY' ? 'crossed above' : 'crossed below'
+  const bias = action === 'BUY' ? 'bullish' : 'bearish'
+  return `Fast SMA(${FAST_PERIOD}) ${verb} Slow SMA(${SLOW_PERIOD}) ($${fast.toFixed(2)} vs $${slow.toFixed(2)}), signaling ${bias} momentum. Signal strength ${strength}/100 with ${risk.toLowerCase()} volatility. Strength reflects setup clarity, not a win probability.`
+}
+
+/** Reasoning for the "right now" signal, which reflects the current trend state. */
+function buildCurrentReasoning(
+  action: 'BUY' | 'SELL' | 'WAIT',
+  fast: number,
+  slow: number,
+  risk: RiskLevel,
+  strength: number,
+): string {
+  const separationPct = (Math.abs(fast - slow) / slow) * 100
+  if (action === 'BUY') {
+    return `Fast SMA(${FAST_PERIOD}) is trading ${separationPct.toFixed(2)}% above Slow SMA(${SLOW_PERIOD}), a bullish trend. Signal strength ${strength}/100 with ${risk.toLowerCase()} volatility — a setup-clarity score, not a win probability.`
+  }
+  if (action === 'SELL') {
+    return `Fast SMA(${FAST_PERIOD}) is trading ${separationPct.toFixed(2)}% below Slow SMA(${SLOW_PERIOD}), a bearish trend. Signal strength ${strength}/100 with ${risk.toLowerCase()} volatility — a setup-clarity score, not a win probability.`
+  }
+  return `Fast SMA(${FAST_PERIOD}) and Slow SMA(${SLOW_PERIOD}) are only ${separationPct.toFixed(2)}% apart — too close for a confident trend call. Standing by for a clearer setup.`
+}
+
+function findSignals(candles: Candle[], context: StrategyContext): Signal[] {
   const fastSma = sma(candles, FAST_PERIOD)
   const slowSma = sma(candles, SLOW_PERIOD)
   const vol = rollingVolatility(candles, FAST_PERIOD)
@@ -110,34 +115,30 @@ export function computeCrossoverSignals(asset: AssetSymbol, candles: Candle[]): 
     const entry = candles[i].close
     const risk = riskFromVolatility(vol[i])
     const strength = strengthFromSeparation(fast, slow, vol[i])
-    const { target, stopLoss } = targetAndStop(action, entry, vol[i])
+    const { target, stopLoss } = buildTargetAndStop(action, entry, vol[i])
 
     signals.push({
-      id: `${asset}-${i}`,
-      asset,
+      id: `${context.asset.symbol}-${context.timeframe}-${i}`,
+      asset: context.asset.symbol,
+      timeframe: context.timeframe,
       action,
       candleIndex: i,
       timestamp: candles[i].timestamp,
-      entryPrice: entry,
+      entryZone: buildEntryZone(entry, vol[i]),
       target,
       stopLoss,
       riskLevel: risk,
       strength,
+      strategyName: STRATEGY_NAME,
       reasoning: buildCrossoverReasoning(action, fast, slow, risk, strength),
+      isSimulated: context.isSimulated,
     })
   }
 
   return signals
 }
 
-/**
- * Determines the "current" signal shown on the dashboard. Unlike the
- * discrete crossover events above, this reflects the trend the asset is
- * in *right now*: BUY/SELL if the Fast SMA is clearly on one side of the
- * Slow SMA, or WAIT if the two are too close together to call a trend
- * with any confidence.
- */
-export function computeLatestSignal(asset: AssetSymbol, candles: Candle[]): Signal {
+function currentSignal(candles: Candle[], context: StrategyContext): Signal {
   const lastIndex = candles.length - 1
   const fastSma = sma(candles, FAST_PERIOD)
   const slowSma = sma(candles, SLOW_PERIOD)
@@ -150,20 +151,28 @@ export function computeLatestSignal(asset: AssetSymbol, candles: Candle[]): Sign
 
   const trend: 'BUY' | 'SELL' = fast >= slow ? 'BUY' : 'SELL'
   const action = strength < WEAK_SIGNAL_THRESHOLD ? 'WAIT' : trend
-
-  const levels = action === 'WAIT' ? undefined : targetAndStop(action, entry, vol[lastIndex])
+  const levels = action === 'WAIT' ? undefined : buildTargetAndStop(action, entry, vol[lastIndex])
 
   return {
-    id: `${asset}-current-${lastIndex}`,
-    asset,
+    id: `${context.asset.symbol}-${context.timeframe}-current-${lastIndex}`,
+    asset: context.asset.symbol,
+    timeframe: context.timeframe,
     action,
     candleIndex: lastIndex,
     timestamp: candles[lastIndex].timestamp,
-    entryPrice: entry,
+    entryZone: buildEntryZone(entry, vol[lastIndex]),
     target: levels?.target,
     stopLoss: levels?.stopLoss,
     riskLevel: risk,
     strength,
+    strategyName: STRATEGY_NAME,
     reasoning: buildCurrentReasoning(action, fast, slow, risk, strength),
+    isSimulated: context.isSimulated,
   }
+}
+
+export const smaCrossoverStrategy: Strategy = {
+  name: STRATEGY_NAME,
+  findSignals,
+  currentSignal,
 }

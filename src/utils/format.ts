@@ -12,3 +12,7 @@ export function formatPct(value: number, withSign = true): string {
   const sign = withSign && value > 0 ? '+' : ''
   return `${sign}${value.toFixed(2)}%`
 }
+
+export function formatDate(timestamp: number): string {
+  return new Date(timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}

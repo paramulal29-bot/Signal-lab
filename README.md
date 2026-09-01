@@ -1,45 +1,90 @@
-# SignalLab (v1)
+# SignalLab (v2)
 
-SignalLab is a demo crypto trading-signals dashboard. It generates BUY /
+SignalLab is a demo crypto market-analysis prototype. It generates BUY /
 SELL / WAIT signals from a simple SMA crossover strategy run over
-**simulated (mock) historical price data** and shows them in a dashboard,
-along with a basic backtest.
+**simulated (mock) historical price data**, records both winning and
+losing signals in a local signal-history store, and shows performance
+statistics computed from that history.
 
-> **This is an educational demo.** No live market data, no real exchange
-> connection, no real trades, no guaranteed profits, and not financial
-> advice. See the in-app Risk Disclosure section for details.
+> **This is an educational demo.** No live market data, no real exchange,
+> broker, or wallet connection, no order execution, no real money, and no
+> guaranteed-profit claims. "Signal Strength" is a setup-clarity score,
+> **not** a win probability. See the in-app Risk Disclosure section for
+> details.
 
-## How it's organized
+## Architecture
+
+The signal engine (`src/core/`) is plain TypeScript with no React in it,
+built as a pipeline of swappable, interface-bound pieces:
 
 ```
-src/
-  core/            Signal-generation engine (plain TypeScript, no React)
-    types.ts       Shared types: Asset, Candle, Signal, BacktestResult...
-    assets.ts      The 4 supported assets (BTC, ETH, SOL, BNB)
-    mockData.ts    Generates a realistic-looking mock price history
-    indicators.ts  SMA + rolling volatility helpers
-    strategy.ts    The SMA crossover strategy -> BUY/SELL/WAIT signals
-    backtest.ts    Walks the signal history and scores win/loss trades
-    engine.ts      Wires the above into one buildMarketData() call
-
-  components/      React UI, grouped by section
-    layout/        Header, footer, disclosure banners
-    market/        Market overview cards
-    signals/       Signal cards, active-signals table, signal history
-    chart/         Price chart with BUY/SELL markers
-    stats/         Performance statistics
-    watchlist/     Watchlist
-    pricing/        Free vs Pro comparison
-    common/         Small shared building blocks (Card, badges, ...)
-
-  utils/format.ts  Currency/percentage formatting helpers
-  App.tsx          Composes everything into the dashboard page
+MarketDataProvider (interface)              core/data/MarketDataProvider.ts
+   └─ MockMarketDataProvider                 core/data/MockMarketDataProvider.ts
+        │  Candle[]
+        ▼
+Strategy (interface)                        core/strategies/Strategy.ts
+   └─ smaCrossoverStrategy                   core/strategies/smaCrossoverStrategy.ts
+        │  Signal[]
+        ▼
+SignalEngine                                core/signals/SignalEngine.ts
+        │
+        ▼
+SignalStore (interface)          PerformanceCalculator
+   └─ LocalSignalStore                core/performance/PerformanceCalculator.ts
+      (localStorage)
+        │                                     │
+        └──────────────┬──────────────────────┘
+                        ▼
+                 React UI (src/App.tsx, src/components/)
 ```
 
-The rule of thumb: **`core/` has no React in it.** It's a small,
-readable pipeline — `mock data -> indicators -> strategy -> signals ->
-backtest` — that the UI just reads from. If you want to add a new
-strategy or swap in real market data later, `core/` is where that goes.
+**Why it's split this way:** `MarketDataProvider` and `SignalStore` are
+the two seams meant for later phases. Swapping mock data for a real
+crypto market-data API means writing one new class that implements
+`MarketDataProvider` — nothing else in the pipeline changes. Swapping
+local storage for a real backend means writing one new class that
+implements `SignalStore`. `core/engine.ts` is the only file that wires
+concrete implementations together (`new MockMarketDataProvider()`,
+`new LocalSignalStore()`) — that's the one line phase 3 will change.
+
+```
+src/core/
+  types.ts                  Signal, SignalRecord, EntryZone, Timeframe, PerformanceSummary...
+  config.ts                 DATA_MODE ('SIMULATED' today), supported timeframes
+  assets.ts                 The 4 supported assets (BTC, ETH, SOL, BNB)
+  indicators.ts              SMA + rolling volatility helpers
+
+  data/
+    MarketDataProvider.ts     Interface: getCandles(asset, timeframe)
+    MockMarketDataProvider.ts Mock implementation (random-walk candle generator)
+
+  strategies/
+    Strategy.ts                Interface: findSignals() + currentSignal()
+    smaCrossoverStrategy.ts    The SMA(10/30) crossover strategy
+
+  signals/
+    SignalEngine.ts             Runs a Strategy over candles, records results
+    SignalStore.ts              Interface: record() / resolve() / list() / clear()
+    LocalSignalStore.ts         localStorage-backed implementation (in-memory fallback)
+
+  performance/
+    PerformanceCalculator.ts   Win rate, avg win/loss, profit factor, max drawdown
+
+  engine.ts                  Wires the above together: buildMarketData()
+
+src/components/    React UI, grouped by section (layout/market/signals/chart/stats/watchlist/pricing/common)
+src/utils/format.ts  Currency/percentage/date formatting helpers
+src/App.tsx          Loads market data (async) and composes the dashboard page
+```
+
+### The `Signal` and `SignalRecord` types
+
+A `Signal` is what a strategy produces: asset, timeframe, action
+(BUY/SELL/WAIT), an entry zone (not a single tick), target, stop,
+risk level, a 0-100 signal strength, the strategy's name, a timestamp,
+and reasoning text. A `SignalRecord` is a `Signal` that has been written
+to a `SignalStore`, with its outcome (`OPEN` / `WIN` / `LOSS`) — both
+wins and losses are always recorded, never filtered out of history.
 
 ## Run it locally
 
@@ -67,7 +112,9 @@ npm run lint      # run oxlint
 
 ## What's next
 
-- Real (or at least live-refreshed) market data
-- More strategies (RSI, MACD, ...) selectable per asset
-- Persisting the watchlist and signal history
+- A `LiveMarketDataProvider` implementing `MarketDataProvider` against a
+  real crypto market-data API (the architecture is ready for this; it
+  is intentionally not built yet)
+- A second strategy (RSI, MACD, ...) implementing `Strategy`
+- An API-backed `SignalStore` implementation
 - Pro plan / payments (intentionally not built yet)

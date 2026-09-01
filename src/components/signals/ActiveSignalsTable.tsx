@@ -8,39 +8,44 @@ import { StrengthMeter } from './StrengthMeter'
 export function ActiveSignalsTable({ markets }: { markets: AssetMarketData[] }) {
   return (
     <Card>
-      <h2 className="mb-3 text-base font-semibold text-white">Active Signals</h2>
+      <div className="mb-3 flex items-baseline justify-between">
+        <h2 className="text-base font-semibold text-white">Active Signals</h2>
+        <p className="text-xs text-gray-500">Signal Strength reflects setup clarity, not a win probability</p>
+      </div>
       <div className="overflow-x-auto">
         <table className="w-full min-w-150 text-left text-sm">
           <thead>
             <tr className="border-b border-border text-xs uppercase tracking-wide text-gray-500">
               <th className="py-2 pr-3 font-medium">Asset</th>
               <th className="py-2 pr-3 font-medium">Signal</th>
-              <th className="py-2 pr-3 font-medium">Entry</th>
+              <th className="py-2 pr-3 font-medium">Entry Zone</th>
               <th className="py-2 pr-3 font-medium">Target</th>
               <th className="py-2 pr-3 font-medium">Stop</th>
               <th className="py-2 pr-3 font-medium">Risk</th>
-              <th className="py-2 pr-3 font-medium">Strength</th>
+              <th className="py-2 pr-3 font-medium">Signal Strength</th>
             </tr>
           </thead>
           <tbody>
-            {markets.map(({ asset, latestSignal }) => (
+            {markets.map(({ asset, currentSignal }) => (
               <tr key={asset.symbol} className="border-b border-border/60 last:border-0">
                 <td className="py-3 pr-3 font-semibold text-white">{asset.symbol}</td>
                 <td className="py-3 pr-3">
-                  <SignalBadge action={latestSignal.action} />
+                  <SignalBadge action={currentSignal.action} />
                 </td>
-                <td className="py-3 pr-3 text-gray-300">{formatUsd(latestSignal.entryPrice)}</td>
+                <td className="py-3 pr-3 text-gray-300">
+                  {formatUsd(currentSignal.entryZone.low)}&ndash;{formatUsd(currentSignal.entryZone.high)}
+                </td>
                 <td className="py-3 pr-3 text-buy">
-                  {latestSignal.target ? formatUsd(latestSignal.target) : '—'}
+                  {currentSignal.target ? formatUsd(currentSignal.target) : '—'}
                 </td>
                 <td className="py-3 pr-3 text-sell">
-                  {latestSignal.stopLoss ? formatUsd(latestSignal.stopLoss) : '—'}
+                  {currentSignal.stopLoss ? formatUsd(currentSignal.stopLoss) : '—'}
                 </td>
                 <td className="py-3 pr-3">
-                  <RiskBadge level={latestSignal.riskLevel} />
+                  <RiskBadge level={currentSignal.riskLevel} />
                 </td>
                 <td className="py-3 pr-3">
-                  <StrengthMeter value={latestSignal.strength} />
+                  <StrengthMeter value={currentSignal.strength} label="" />
                 </td>
               </tr>
             ))}

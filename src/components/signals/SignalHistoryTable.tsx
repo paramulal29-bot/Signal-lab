@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import type { AssetMarketData, BacktestTrade, SignalOutcome } from '../../core/types'
-import { formatPct, formatUsd } from '../../utils/format'
+import type { AssetMarketData, SignalOutcome, SignalRecord } from '../../core/types'
+import { formatDate, formatPct, formatUsd } from '../../utils/format'
 import { Card } from '../common/Card'
 
 type FilterKey = 'ALL' | SignalOutcome
@@ -18,28 +18,24 @@ const OUTCOME_STYLES: Record<SignalOutcome, string> = {
   OPEN: 'bg-wait/15 text-wait border-wait/40',
 }
 
-interface Row extends BacktestTrade {
-  entryTimestamp: number
-}
-
 export function SignalHistoryTable({ markets }: { markets: AssetMarketData[] }) {
   const [filter, setFilter] = useState<FilterKey>('ALL')
 
-  const rows: Row[] = markets
-    .flatMap((m) =>
-      m.backtest.trades.map((t) => {
-        const signal = m.signals.find((s) => s.id === t.id)
-        return { ...t, entryTimestamp: signal?.timestamp ?? 0 }
-      }),
-    )
-    .sort((a, b) => b.entryTimestamp - a.entryTimestamp)
+  const records: SignalRecord[] = markets
+    .flatMap((m) => m.records)
+    .sort((a, b) => b.timestamp - a.timestamp)
 
-  const filtered = filter === 'ALL' ? rows : rows.filter((r) => r.outcome === filter)
+  const filtered = filter === 'ALL' ? records : records.filter((r) => r.outcome === filter)
 
   return (
     <Card id="history" className="scroll-mt-20">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-base font-semibold text-white">Signal History</h2>
+        <div>
+          <h2 className="text-base font-semibold text-white">Signal History</h2>
+          <p className="text-xs text-gray-500">
+            Every signal the strategy has produced on simulated data &mdash; wins and losses both recorded.
+          </p>
+        </div>
         <div className="flex gap-1.5 rounded-lg border border-border bg-surface-alt p-1">
           {FILTERS.map((f) => (
             <button
@@ -62,7 +58,7 @@ export function SignalHistoryTable({ markets }: { markets: AssetMarketData[] }) 
             <tr className="border-b border-border text-xs uppercase tracking-wide text-gray-500">
               <th className="py-2 pr-3 font-medium">Asset</th>
               <th className="py-2 pr-3 font-medium">Action</th>
-              <th className="py-2 pr-3 font-medium">Entry</th>
+              <th className="py-2 pr-3 font-medium">Entry Zone</th>
               <th className="py-2 pr-3 font-medium">Exit</th>
               <th className="py-2 pr-3 font-medium">Return</th>
               <th className="py-2 pr-3 font-medium">Outcome</th>
@@ -76,30 +72,36 @@ export function SignalHistoryTable({ markets }: { markets: AssetMarketData[] }) 
                 </td>
               </tr>
             )}
-            {filtered.map((trade) => (
-              <tr key={trade.id} className="border-b border-border/60 last:border-0">
-                <td className="py-2.5 pr-3 font-semibold text-white">{trade.asset}</td>
-                <td className="py-2.5 pr-3 text-gray-300">{trade.action}</td>
+            {filtered.map((record) => (
+              <tr key={record.id} className="border-b border-border/60 last:border-0">
+                <td className="py-2.5 pr-3 font-semibold text-white">{record.asset}</td>
+                <td className="py-2.5 pr-3 text-gray-300">{record.action}</td>
                 <td className="py-2.5 pr-3 text-gray-300">
-                  {formatUsd(trade.entryPrice)}
-                  <span className="ml-1 text-xs text-gray-500">({trade.entryTime})</span>
+                  {formatUsd(record.entryZone.low)}&ndash;{formatUsd(record.entryZone.high)}
+                  <span className="ml-1 text-xs text-gray-500">({formatDate(record.timestamp)})</span>
                 </td>
                 <td className="py-2.5 pr-3 text-gray-300">
-                  {trade.exitPrice ? formatUsd(trade.exitPrice) : '—'}
-                  {trade.exitTime && <span className="ml-1 text-xs text-gray-500">({trade.exitTime})</span>}
+                  {record.exitPrice ? formatUsd(record.exitPrice) : '—'}
+                  {record.closedAt && (
+                    <span className="ml-1 text-xs text-gray-500">({formatDate(record.closedAt)})</span>
+                  )}
                 </td>
                 <td
                   className={`py-2.5 pr-3 font-medium ${
-                    trade.returnPct === null ? 'text-gray-500' : trade.returnPct >= 0 ? 'text-buy' : 'text-sell'
+                    record.returnPct === undefined
+                      ? 'text-gray-500'
+                      : record.returnPct >= 0
+                        ? 'text-buy'
+                        : 'text-sell'
                   }`}
                 >
-                  {trade.returnPct === null ? '—' : formatPct(trade.returnPct)}
+                  {record.returnPct === undefined ? '—' : formatPct(record.returnPct)}
                 </td>
                 <td className="py-2.5 pr-3">
                   <span
-                    className={`inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-semibold ${OUTCOME_STYLES[trade.outcome]}`}
+                    className={`inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-semibold ${OUTCOME_STYLES[record.outcome]}`}
                   >
-                    {trade.outcome}
+                    {record.outcome}
                   </span>
                 </td>
               </tr>

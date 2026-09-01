@@ -11,7 +11,7 @@ interface MarketCardProps {
 }
 
 export function MarketCard({ data, selected, onSelect }: MarketCardProps) {
-  const { asset, currentPrice, changePct24h, latestSignal, candles } = data
+  const { asset, currentPrice, changePct24h, currentSignal, candles } = data
   const isUp = changePct24h >= 0
   const sparkData = candles.slice(-30).map((c) => ({ close: c.close }))
 
@@ -35,7 +35,7 @@ export function MarketCard({ data, selected, onSelect }: MarketCardProps) {
               <p className="text-xs text-gray-500">{asset.name}</p>
             </div>
           </div>
-          <SignalBadge action={latestSignal.action} />
+          <SignalBadge action={currentSignal.action} />
         </div>
 
         <div className="mt-4 flex items-end justify-between gap-2">

@@ -6,8 +6,8 @@ import { SignalBadge } from '../common/SignalBadge'
 import { StrengthMeter } from './StrengthMeter'
 
 export function SignalCard({ data }: { data: AssetMarketData }) {
-  const { asset, latestSignal } = data
-  const isWait = latestSignal.action === 'WAIT'
+  const { asset, currentSignal } = data
+  const isWait = currentSignal.action === 'WAIT'
 
   return (
     <Card className="flex h-full flex-col gap-4">
@@ -21,35 +21,44 @@ export function SignalCard({ data }: { data: AssetMarketData }) {
           </span>
           <span className="font-semibold text-white">{asset.symbol}/USD</span>
         </div>
-        <SignalBadge action={latestSignal.action} />
+        <SignalBadge action={currentSignal.action} />
       </div>
 
       <div className="grid grid-cols-3 gap-3 text-sm">
         <div>
-          <p className="text-xs text-gray-500">Entry</p>
-          <p className="font-semibold text-white">{formatUsd(latestSignal.entryPrice)}</p>
+          <p className="text-xs text-gray-500">Entry Zone</p>
+          <p className="font-semibold text-white">
+            {formatUsd(currentSignal.entryZone.low)}&ndash;{formatUsd(currentSignal.entryZone.high)}
+          </p>
         </div>
         <div>
           <p className="text-xs text-gray-500">Target</p>
           <p className="font-semibold text-buy">
-            {latestSignal.target ? formatUsd(latestSignal.target) : '—'}
+            {currentSignal.target ? formatUsd(currentSignal.target) : '—'}
           </p>
         </div>
         <div>
           <p className="text-xs text-gray-500">Stop / Invalidation</p>
           <p className="font-semibold text-sell">
-            {latestSignal.stopLoss ? formatUsd(latestSignal.stopLoss) : '—'}
+            {currentSignal.stopLoss ? formatUsd(currentSignal.stopLoss) : '—'}
           </p>
         </div>
       </div>
 
-      <div className="flex items-center justify-between">
-        <RiskBadge level={latestSignal.riskLevel} />
-        <StrengthMeter value={latestSignal.strength} />
+      <div className="flex items-end justify-between gap-3">
+        <div>
+          <p className="mb-1 text-[11px] uppercase tracking-wide text-gray-500">Risk Level</p>
+          <RiskBadge level={currentSignal.riskLevel} />
+        </div>
+        <StrengthMeter value={currentSignal.strength} />
       </div>
 
       <p className={`text-xs leading-relaxed ${isWait ? 'text-gray-500' : 'text-gray-400'}`}>
-        {latestSignal.reasoning}
+        {currentSignal.reasoning}
+      </p>
+
+      <p className="text-[11px] text-gray-600">
+        {currentSignal.strategyName} &middot; simulated data
       </p>
     </Card>
   )
