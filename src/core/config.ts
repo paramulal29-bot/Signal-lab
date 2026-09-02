@@ -30,3 +30,9 @@ export const SIGNAL_VALIDITY_MS = 15 * 60_000
 
 /** Cadence of the strategy's analysis cycle (drives the "next analysis" timer). */
 export const ANALYSIS_INTERVAL_MS = 5 * 60_000
+
+/**
+ * Symbols shown in the market pulse. These are DISPLAY ONLY — they feed
+ * no strategy and produce no signal. Only LIVE_SYMBOL is traded.
+ */
+export const PULSE_SYMBOLS = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT']

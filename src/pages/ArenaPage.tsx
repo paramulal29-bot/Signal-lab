@@ -1,67 +1,73 @@
-import { Link } from 'react-router-dom'
-import { Lock } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { AlertFeed, AlertSettingsPanel } from '../components/alerts/AlertHost'
+import { ExecutionSequence } from '../components/arena/ExecutionSequence'
 import { LiveChart } from '../components/arena/LiveChart'
 import { LiveVsSignal } from '../components/arena/LiveVsSignal'
 import { MarketStatusBar } from '../components/arena/MarketStatusBar'
 import { PaperTradePanel } from '../components/arena/PaperTradePanel'
-import { SignalPanel } from '../components/arena/SignalPanel'
+import { TradeResult } from '../components/arena/TradeResult'
 import { TradeReview } from '../components/arena/TradeReview'
 import { DisciplinePanel } from '../components/discipline/DisciplinePanel'
 import { Panel } from '../components/instrument/Panel'
+import { SystemBar } from '../components/instrument/SystemBar'
+import { SignalStage } from '../components/signal/SignalStage'
 import { useArena } from '../hooks/useArena'
-import { arenaUnlocked, loadProgress } from '../core/academy/progress'
+import type { PaperTrade } from '../core/types'
 
 export function ArenaPage() {
-  const arena = useArena()
-  const progress = loadProgress()
-
-  if (!arenaUnlocked(progress)) {
-    return (
-      <div className="mx-auto max-w-3xl px-4 py-16 sm:px-6">
-        <Panel title="Practice Arena — locked">
-          <div className="flex flex-col items-center gap-3 py-8 text-center">
-            <Lock className="h-7 w-7 text-hold" aria-hidden />
-            <h2 className="text-lg font-semibold text-ink">Complete the knowledge check first</h2>
-            <p className="max-w-md text-sm text-ink-dim">
-              The Practice Arena opens once you have passed the Beginner Academy knowledge check.
-              Understanding entries, invalidation and position sizing before placing even a virtual
-              trade is the entire point of this platform.
-            </p>
-            <Link
-              to="/academy"
-              className="mt-2 rounded-sm border border-instrument/50 bg-instrument/10 px-4 py-2 text-xs font-semibold tracking-[0.14em] text-instrument transition-colors hover:bg-instrument/20"
-            >
-              GO TO ACADEMY
-            </Link>
-          </div>
-        </Panel>
-      </div>
-    )
-  }
-
   const {
     snapshot,
-    currentSignal,
+    phase,
+    now,
     activeSignal,
     latestSignal,
     openTrade,
-    trades,
+    lastClosedTrade,
     balance,
     equity,
     discipline,
     alerts,
     nextAnalysisAt,
+    progression,
     enterTrade,
     closeTrade,
+    grantXp,
     useSimulation,
     useLive,
-  } = arena
+  } = useArena()
+
+  /** Set briefly right after an entry, to play the execution readout. */
+  const [executing, setExecuting] = useState<PaperTrade | undefined>()
+  const [reviewOpen, setReviewOpen] = useState(false)
+  const reviewRef = useRef<HTMLDivElement | null>(null)
 
   const dataUnavailable = snapshot.status === 'OFFLINE'
-  const priceVerified = snapshot.price !== undefined && (snapshot.status === 'LIVE' || snapshot.status === 'SIMULATED')
+  const priceVerified =
+    snapshot.price !== undefined && (snapshot.status === 'LIVE' || snapshot.status === 'SIMULATED')
   const canTrade = priceVerified && Boolean(activeSignal) && !openTrade
-  const lastClosedTrade = trades.find((t) => t.status === 'CLOSED')
+
+  const handleEnter = useCallback(
+    (signal: NonNullable<typeof activeSignal>, riskPct: number) => {
+      const result = enterTrade(signal, riskPct)
+      if (result.ok) setExecuting(result.trade)
+      return result
+    },
+    [enterTrade],
+  )
+
+  // Reviewing a completed decision is where the learning happens, so it
+  // earns XP — once per trade.
+  const openReview = useCallback(() => {
+    setReviewOpen(true)
+    if (lastClosedTrade) grantXp('TRADE_REVIEWED', `review-${lastClosedTrade.id}`)
+    reviewRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [lastClosedTrade, grantXp])
+
+  useEffect(() => {
+    if (openTrade) setReviewOpen(false)
+  }, [openTrade])
+
+  const utcClock = new Date(now).toISOString().slice(11, 19)
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6">
@@ -75,31 +81,33 @@ export function ArenaPage() {
       {dataUnavailable && (
         <div
           role="alert"
-          className="rounded-sm border border-short/50 bg-short/10 px-4 py-3 text-sm text-short"
+          className="border border-short/50 bg-short/10 px-4 py-3 text-sm text-short"
         >
-          <p className="font-semibold tracking-wide">LIVE DATA UNAVAILABLE</p>
+          <p className="font-bold tracking-[0.14em]">LIVE DATA UNAVAILABLE</p>
           <p className="mt-1 text-xs text-ink-dim">
             We can&apos;t verify the current market price, so no signal is calculated and no paper
-            trade can be opened. You can switch to simulation mode to keep practicing on generated
-            data — it will be labeled as simulated everywhere.
+            trade can be opened. Switch to simulation to keep practicing on generated data — it is
+            labeled as simulated everywhere.
           </p>
         </div>
       )}
 
       <AlertFeed alerts={alerts} />
 
-      <SignalPanel
-        signal={activeSignal ?? latestSignal}
-        currentSignal={currentSignal}
-        dataUnavailable={dataUnavailable}
-      />
+      <SignalStage phase={phase} signal={latestSignal} nextAnalysisAt={nextAnalysisAt} />
 
-      <Panel title={`Live Chart — ${snapshot.symbol} ${snapshot.timeframe}`}>
+      {executing && (
+        <ExecutionSequence trade={executing} onDone={() => setExecuting(undefined)} />
+      )}
+
+      {phase === 'RESULT' && lastClosedTrade && !reviewOpen && (
+        <TradeResult trade={lastClosedTrade} onReview={openReview} />
+      )}
+
+      <Panel title={`Live chart — ${snapshot.symbol} ${snapshot.timeframe}`}>
         {snapshot.candles.length === 0 ? (
           <p className="py-16 text-center text-xs text-ink-dim">
-            {dataUnavailable
-              ? 'No market data to chart.'
-              : 'Loading market data…'}
+            {dataUnavailable ? 'No market data to chart.' : 'Loading market data…'}
           </p>
         ) : (
           <LiveChart
@@ -118,13 +126,15 @@ export function ArenaPage() {
           equity={equity}
           price={snapshot.price}
           canTrade={canTrade}
-          onEnter={enterTrade}
+          onEnter={handleEnter}
           onClose={closeTrade}
         />
         <LiveVsSignal signal={activeSignal ?? latestSignal} price={snapshot.price} />
       </div>
 
-      <TradeReview trade={lastClosedTrade} />
+      <div ref={reviewRef}>
+        <TradeReview trade={lastClosedTrade} />
+      </div>
 
       <DisciplinePanel discipline={discipline} />
 
@@ -135,6 +145,13 @@ export function ArenaPage() {
           to create urgency.
         </p>
       </Panel>
+
+      <SystemBar
+        snapshot={snapshot}
+        signal={latestSignal}
+        sessionCount={progression.sessionCount}
+        utcClock={utcClock}
+      />
     </div>
   )
 }

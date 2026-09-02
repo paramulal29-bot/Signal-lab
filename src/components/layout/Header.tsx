@@ -1,9 +1,9 @@
 import { NavLink, Link } from 'react-router-dom'
-import { Activity } from 'lucide-react'
+import { Activity, Zap } from 'lucide-react'
 
 const NAV_LINKS = [
+  { to: '/arena', label: 'PRACTICE' },
   { to: '/academy', label: 'ACADEMY' },
-  { to: '/arena', label: 'PRACTICE ARENA' },
   { to: '/performance', label: 'PERFORMANCE' },
   { to: '/records', label: 'SIGNAL RECORD' },
   { to: '/simulation', label: 'SIMULATION LAB' },
@@ -40,10 +40,11 @@ export function Header() {
         </nav>
 
         <Link
-          to="/academy"
-          className="rounded-sm border border-long/50 bg-long/10 px-3 py-1.5 text-[10px] font-semibold tracking-[0.14em] text-long transition-colors hover:bg-long/20"
+          to="/arena"
+          className="btn flex items-center gap-1.5 border border-long/50 bg-long/15 px-3.5 py-1.5 text-[10px] font-bold tracking-[0.14em] text-long hover:bg-long/25"
         >
-          START TRAINING
+          <Zap className="h-3 w-3" aria-hidden />
+          PRACTICE NOW
         </Link>
       </div>
 

@@ -1,4 +1,4 @@
-# SignalLab (v3)
+# SignalLab (v4)
 
 **Practice the market before you risk your money.**
 
@@ -45,12 +45,33 @@ an existing interface — nothing downstream changes.
 
 | Route | What it is |
 |---|---|
-| `/` | Landing page |
-| `/academy` | Beginner Academy — 17 lessons + knowledge check (gates the Arena) |
-| `/arena` | Practice Arena — live chart, signal, timers, paper trading |
+| `/` | Home — live ticker, signal stage, market pulse, next move, progression |
+| `/academy` | Academy — optional module library + knowledge check (gates nothing) |
+| `/arena` | Practice Arena — live chart, signal lifecycle, timers, paper trading |
 | `/performance` | Live paper-trading performance + virtual equity curve |
 | `/records` | Public, immutable signal record |
 | `/simulation` | The earlier multi-asset simulated dashboard, preserved |
+
+## Experience model
+
+Practice is never gated behind the Academy: `PRACTICE NOW` goes straight to the
+Arena from anywhere. The signal moves through a visible lifecycle —
+SCANNING → SETUP DETECTED → ACTIVE → EXPIRING → EXPIRED → RESULT — derived
+entirely from real engine state. `SCANNING` ("no valid setup") is presented as
+a legitimate outcome with its own panel and next-scan timer; no signal is ever
+fabricated to keep the screen busy.
+
+Progression (`src/core/progression`) awards XP only for **learning and
+discipline** — lessons, the knowledge check, reviewing a closed trade, and
+following the rules on a trade. There is deliberately no XP for number of
+trades, virtual profit, or time on site, and the training streak is kept alive
+by any training activity, so nobody is pushed to trade daily to protect a
+number.
+
+Motion is used only to report something real: a price flash fires on an actual
+tick, the countdown reflects the true window, the scan bar reports the engine
+cycling, and meters animate on genuine progress changes. Everything respects
+`prefers-reduced-motion`.
 
 ## Paper trading rules
 

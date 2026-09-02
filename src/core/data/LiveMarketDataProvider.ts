@@ -110,6 +110,41 @@ export function parseKlines(payload: unknown, timeframe: Timeframe): Candle[] {
   return candles
 }
 
+/** One row of the market pulse: a symbol's last price and 24h change. */
+export interface PulseQuote {
+  symbol: string
+  price: number
+  changePct24h: number
+}
+
+/**
+ * Parses Binance's /ticker/24hr payload (array form) into pulse quotes.
+ * Rows that are malformed are dropped rather than shown as zeroes — the
+ * pulse displays only values it actually received.
+ */
+export function parsePulseQuotes(payload: unknown): PulseQuote[] {
+  if (!Array.isArray(payload)) {
+    throw new MarketDataError('Unexpected ticker response: expected an array.')
+  }
+
+  const quotes: PulseQuote[] = []
+  for (const row of payload) {
+    if (typeof row !== 'object' || row === null) continue
+    const record = row as Record<string, unknown>
+    const price = Number(record.lastPrice)
+    const changePct24h = Number(record.priceChangePercent)
+    if (typeof record.symbol !== 'string' || !Number.isFinite(price) || !Number.isFinite(changePct24h)) {
+      continue
+    }
+    quotes.push({ symbol: record.symbol, price, changePct24h })
+  }
+
+  if (quotes.length === 0) {
+    throw new MarketDataError('Ticker response contained no usable quotes.')
+  }
+  return quotes
+}
+
 /** Parses Binance's /ticker/price payload into a number. */
 export function parseTickerPrice(payload: unknown): number {
   const price =
@@ -162,5 +197,15 @@ export class LiveMarketDataProvider {
   async getPrice(symbol: string, signal?: AbortSignal): Promise<number> {
     const url = `${BASE_URL}/api/v3/ticker/price?symbol=${encodeURIComponent(symbol)}`
     return parseTickerPrice(await fetchJson(url, signal))
+  }
+
+  /**
+   * Reads 24h stats for several symbols at once, used only to display
+   * the market pulse. This feeds no strategy and generates no signal.
+   */
+  async getPulse(symbols: string[], signal?: AbortSignal): Promise<PulseQuote[]> {
+    const query = encodeURIComponent(JSON.stringify(symbols))
+    const url = `${BASE_URL}/api/v3/ticker/24hr?symbols=${query}`
+    return parsePulseQuotes(await fetchJson(url, signal))
   }
 }

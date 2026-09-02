@@ -1,7 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ASSETS } from '../core/assets'
 import { ANALYSIS_INTERVAL_MS, LIVE_SYMBOL, LIVE_SYMBOL_LABEL, LIVE_TIMEFRAME } from '../core/config'
+import type { PulseQuote } from '../core/data/LiveMarketDataProvider'
 import { MarketDataService } from '../core/data/MarketDataService'
+import { derivePhase, type SignalPhase } from '../core/signals/lifecycle'
+import {
+  awardXp,
+  currentStreak,
+  loadProgression,
+  saveProgression,
+  startSession,
+  type ProgressionState,
+  type XpReason,
+} from '../core/progression/ProgressionEngine'
 import { alertService, buildAlert, type SignalLabAlert } from '../core/alerts/AlertService'
 import { calculateDiscipline, detectOvertrading } from '../core/discipline/DisciplineEngine'
 import { paperTradingEngine, type OpenTradeResult } from '../core/paper/PaperTradingEngine'
@@ -43,6 +54,9 @@ export interface ArenaState {
 
 export function useArena() {
   const [snapshot, setSnapshot] = useState<MarketSnapshot>(marketService.getSnapshot())
+  const [pulse, setPulse] = useState<PulseQuote[] | undefined>(() => marketService.getPulse())
+  const [progression, setProgression] = useState<ProgressionState>(() => loadProgression())
+  const [nowTick, setNowTick] = useState(() => Date.now())
   const [publishedSignals, setPublishedSignals] = useState<PublishedSignal[]>(() => publisher.list())
   const [trades, setTrades] = useState<PaperTrade[]>(() => tradeStore.list())
   const [violations, setViolations] = useState<RuleViolation[]>(() => tradeStore.listViolations())
@@ -61,8 +75,30 @@ export function useArena() {
 
   useEffect(() => {
     const unsubscribe = marketService.subscribe(setSnapshot)
+    const unsubscribePulse = marketService.subscribePulse(setPulse)
     marketService.start()
-    return unsubscribe
+    return () => {
+      unsubscribe()
+      unsubscribePulse()
+    }
+  }, [])
+
+  // One shared 1s clock drives the lifecycle phase and the UTC readout,
+  // instead of every component reading Date.now() during render.
+  useEffect(() => {
+    const id = setInterval(() => setNowTick(Date.now()), 1000)
+    return () => clearInterval(id)
+  }, [])
+
+  // Showing up is itself a training action: it starts a session and
+  // keeps the streak alive. It awards no XP — XP comes from learning
+  // and discipline, never from merely opening the page.
+  useEffect(() => {
+    setProgression((prev) => {
+      const next = startSession(prev)
+      if (next !== prev) saveProgression(next)
+      return next
+    })
   }, [])
 
   /* ---------------- signal generation ---------------- */
@@ -275,6 +311,38 @@ export function useArena() {
 
   const discipline = useMemo(() => calculateDiscipline(trades, violations), [trades, violations])
 
+  const grantXp = useCallback((reason: XpReason, awardId: string) => {
+    setProgression((prev) => {
+      const next = awardXp(prev, reason, awardId)
+      if (next !== prev) saveProgression(next)
+      return next
+    })
+  }, [])
+
+  const lastClosedTrade = useMemo(() => trades.find((t) => t.status === 'CLOSED'), [trades])
+
+  const phase: SignalPhase = useMemo(
+    () =>
+      derivePhase({
+        snapshot,
+        signal: publishedSignals[0],
+        openTrade,
+        lastClosedTrade,
+        now: nowTick,
+      }),
+    [snapshot, publishedSignals, openTrade, lastClosedTrade, nowTick],
+  )
+
+  // A closed trade that followed the rules earns discipline XP once.
+  useEffect(() => {
+    if (!lastClosedTrade) return
+    if (lastClosedTrade.enteredAfterExpiry) return
+    if (lastClosedTrade.riskPctAtEntry > 0.02) return
+    grantXp('RULES_FOLLOWED', `rules-${lastClosedTrade.id}`)
+  }, [lastClosedTrade, grantXp])
+
+  const streak = useMemo(() => currentStreak(progression), [progression])
+
   // ACTIVE state is kept truthful by the expiry tick above, so this does
   // not need to re-read the clock during render.
   const activeSignal = useMemo(
@@ -284,11 +352,15 @@ export function useArena() {
 
   return {
     snapshot,
+    pulse,
+    phase,
+    now: nowTick,
     currentSignal,
     activeSignal,
     latestSignal: publishedSignals[0],
     publishedSignals,
     openTrade,
+    lastClosedTrade,
     trades,
     violations,
     discipline,
@@ -297,6 +369,9 @@ export function useArena() {
     startingCapital: STARTING_CAPITAL,
     alerts,
     nextAnalysisAt,
+    progression,
+    streak,
+    grantXp,
     enterTrade,
     closeTrade,
     resetPractice,

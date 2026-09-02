@@ -1,10 +1,11 @@
-import { LIVE_SYMBOL, LIVE_TIMEFRAME, POLL_INTERVAL_MS, STALE_AFTER_MS } from '../config'
+import { LIVE_SYMBOL, LIVE_TIMEFRAME, POLL_INTERVAL_MS, PULSE_SYMBOLS, STALE_AFTER_MS } from '../config'
 import { ASSETS } from '../assets'
 import type { Candle, MarketSnapshot, MarketStatus, Timeframe } from '../types'
-import { LiveMarketDataProvider } from './LiveMarketDataProvider'
+import { LiveMarketDataProvider, type PulseQuote } from './LiveMarketDataProvider'
 import { MockMarketDataProvider } from './MockMarketDataProvider'
 
 type Listener = (snapshot: MarketSnapshot) => void
+type PulseListener = (quotes: PulseQuote[] | undefined) => void
 
 /** Backoff schedule (ms) applied after consecutive failures. */
 const BACKOFF_MS = [5_000, 10_000, 20_000, 30_000, 60_000]
@@ -43,6 +44,10 @@ export class MarketDataService {
   private simulationMode = false
   private started = false
 
+  /** Display-only market pulse. Undefined until a real fetch succeeds. */
+  private pulse: PulseQuote[] | undefined
+  private pulseListeners = new Set<PulseListener>()
+
   getSnapshot(): MarketSnapshot {
     return this.snapshot
   }
@@ -54,6 +59,16 @@ export class MarketDataService {
       this.listeners.delete(listener)
       if (this.listeners.size === 0) this.stop()
     }
+  }
+
+  getPulse(): PulseQuote[] | undefined {
+    return this.pulse
+  }
+
+  subscribePulse(listener: PulseListener): () => void {
+    this.pulseListeners.add(listener)
+    listener(this.pulse)
+    return () => this.pulseListeners.delete(listener)
   }
 
   /** Begins polling. Safe to call repeatedly; only the first call starts a loop. */
@@ -135,6 +150,9 @@ export class MarketDataService {
         lastUpdate: Date.now(),
         error: undefined,
       })
+      // Pulse is display-only and non-critical: a failure here must never
+      // downgrade the trading feed's status.
+      void this.refreshPulse(controller.signal)
       this.scheduleNext(POLL_INTERVAL_MS)
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') return
@@ -176,6 +194,16 @@ export class MarketDataService {
         status: 'STALE',
         error: this.snapshot.error ?? 'Market data has not refreshed recently.',
       })
+    }
+  }
+
+  private async refreshPulse(signal: AbortSignal): Promise<void> {
+    try {
+      const quotes = await this.live.getPulse(PULSE_SYMBOLS, signal)
+      this.pulse = quotes
+      for (const listener of this.pulseListeners) listener(quotes)
+    } catch {
+      // Leave the last good pulse in place; the UI labels its freshness.
     }
   }
 

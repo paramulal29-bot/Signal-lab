@@ -4,7 +4,7 @@ import { Header } from './components/layout/Header'
 import { RiskDisclosure } from './components/layout/RiskDisclosure'
 import { AcademyPage } from './pages/AcademyPage'
 import { ArenaPage } from './pages/ArenaPage'
-import { LandingPage } from './pages/LandingPage'
+import { HomePage } from './pages/HomePage'
 import { PerformancePage } from './pages/PerformancePage'
 import { RecordsPage } from './pages/RecordsPage'
 import { SimulationLabPage } from './pages/SimulationLabPage'
@@ -17,12 +17,12 @@ import { SimulationLabPage } from './pages/SimulationLabPage'
 export default function App() {
   return (
     <HashRouter>
-      <div className="flex min-h-screen flex-col bg-panel-0">
+      <div className="flex min-h-screen flex-col">
         <Header />
 
         <main className="flex-1">
           <Routes>
-            <Route path="/" element={<LandingPage />} />
+            <Route path="/" element={<HomePage />} />
             <Route path="/academy" element={<AcademyPage />} />
             <Route path="/arena" element={<ArenaPage />} />
             <Route path="/performance" element={<PerformancePage />} />
