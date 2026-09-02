@@ -1,13 +1,38 @@
 import type { DataMode, Timeframe } from './types'
 
 /**
- * Single source of truth for whether the app is running on simulated or
- * live data. Every provider wired up today is mock, so this is always
- * 'SIMULATED'. Flip it only once a real MarketDataProvider is in use —
- * the UI reads this constant (not a hardcoded string) so the
- * simulated-data warnings stay accurate everywhere automatically.
+ * Data mode for the legacy multi-asset Simulation Lab (the V1/V2
+ * dashboard), which is always mock data. The live Practice Arena tracks
+ * its own mode through MarketDataService instead.
  */
 export const DATA_MODE: DataMode = 'SIMULATED'
 
 export const DEFAULT_TIMEFRAME: Timeframe = '1D'
 export const SUPPORTED_TIMEFRAMES: Timeframe[] = ['1H', '4H', '1D']
+
+/* ------------------------------------------------------------------ *
+ * Live market (V3) — one asset, one timeframe, deliberately
+ * ------------------------------------------------------------------ */
+
+/** Exchange symbol for the single live market this version supports. */
+export const LIVE_SYMBOL = 'BTCUSDT'
+export const LIVE_SYMBOL_LABEL = 'BTC/USDT'
+export const LIVE_TIMEFRAME: Timeframe = '1H'
+
+/** How often to poll the public market data endpoint. */
+export const POLL_INTERVAL_MS = 20_000
+
+/** Data older than this is STALE and must not be presented as current. */
+export const STALE_AFTER_MS = 90_000
+
+/** How long a published signal stays valid before it must not be entered. */
+export const SIGNAL_VALIDITY_MS = 15 * 60_000
+
+/** Cadence of the strategy's analysis cycle (drives the "next analysis" timer). */
+export const ANALYSIS_INTERVAL_MS = 5 * 60_000
+
+/**
+ * Symbols shown in the market pulse. These are DISPLAY ONLY — they feed
+ * no strategy and produce no signal. Only LIVE_SYMBOL is traded.
+ */
+export const PULSE_SYMBOLS = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT']

@@ -1,12 +1,17 @@
 export function Footer() {
   return (
-    <footer className="border-t border-border py-8">
-      <div className="mx-auto max-w-7xl px-4 text-center text-xs text-gray-500 sm:px-6">
+    <footer className="mt-12 border-t border-rule py-8">
+      <div className="mx-auto max-w-7xl space-y-2 px-4 text-[11px] leading-relaxed text-ink-faint sm:px-6">
+        <p className="font-semibold tracking-[0.12em] text-ink-dim">SIGNALLAB — TRAINING SIMULATOR</p>
         <p>
-          SignalLab v1 &mdash; a demo trading-signals dashboard built with mock/historical data.
+          Educational paper-trading practice on public market data. Not financial advice. No
+          exchange, broker or wallet is connected, no real orders are placed, and no real money is
+          ever involved.
         </p>
-        <p className="mt-1">
-          Not financial advice. Not connected to any exchange. No real trades are executed.
+        <p>
+          Signal Strength measures setup clarity, never probability of profit. Simulated and
+          backtested results do not indicate future or real-world performance. Trading
+          cryptocurrency carries substantial risk of loss.
         </p>
       </div>
     </footer>

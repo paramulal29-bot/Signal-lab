@@ -1,120 +1,125 @@
-# SignalLab (v2)
+# SignalLab (v4)
 
-SignalLab is a demo crypto market-analysis prototype. It generates BUY /
-SELL / WAIT signals from a simple SMA crossover strategy run over
-**simulated (mock) historical price data**, records both winning and
-losing signals in a local signal-history store, and shows performance
-statistics computed from that history.
+**Practice the market before you risk your money.**
 
-> **This is an educational demo.** No live market data, no real exchange,
-> broker, or wallet connection, no order execution, no real money, and no
-> guaranteed-profit claims. "Signal Strength" is a setup-clarity score,
-> **not** a win probability. See the in-app Risk Disclosure section for
-> details.
+SignalLab is a crypto trading *education and paper-trading* platform. It runs a
+deterministic strategy over public BTC/USDT market data, publishes signals to a
+permanent record, and lets you practice following them with virtual capital
+while the real market decides the outcome.
+
+> **Training simulator.** No exchange, broker, or wallet is connected. No real
+> orders are placed and no real money is involved at any point. "Signal
+> Strength" measures setup clarity, **never** probability of profit. Losing
+> signals and losing trades are recorded and displayed exactly like winning
+> ones.
 
 ## Architecture
 
-The signal engine (`src/core/`) is plain TypeScript with no React in it,
-built as a pipeline of swappable, interface-bound pieces:
-
 ```
-MarketDataProvider (interface)              core/data/MarketDataProvider.ts
-   └─ MockMarketDataProvider                 core/data/MockMarketDataProvider.ts
+MarketDataProvider                     core/data/
+  ├─ LiveMarketDataProvider  ← Binance PUBLIC REST (no API key, read-only)
+  └─ MockMarketDataProvider  ← fallback / Simulation Lab
         │  Candle[]
         ▼
-Strategy (interface)                        core/strategies/Strategy.ts
-   └─ smaCrossoverStrategy                   core/strategies/smaCrossoverStrategy.ts
-        │  Signal[]
+MarketDataService            ← polling, backoff, CONNECTING/LIVE/DEGRADED/
+        │                      STALE/SIMULATED/OFFLINE state machine
         ▼
-SignalEngine                                core/signals/SignalEngine.ts
+Strategy (smaCrossoverStrategy)        core/strategies/
+        │  Signal
+        ▼
+SignalPublisher              ← append-only permanent record; published
+        │                      signals are frozen and never rewritten
+        ▼
+PaperTradingEngine           ← virtual fills, sizing, costs, resolution
         │
-        ▼
-SignalStore (interface)          PerformanceCalculator
-   └─ LocalSignalStore                core/performance/PerformanceCalculator.ts
-      (localStorage)
-        │                                     │
-        └──────────────┬──────────────────────┘
-                        ▼
-                 React UI (src/App.tsx, src/components/)
+        ├─ PaperTradeStore   ← localStorage ledger
+        ├─ PerformanceCalculator / PaperPerformance
+        └─ DisciplineEngine  ← scores process, not profit
 ```
 
-**Why it's split this way:** `MarketDataProvider` and `SignalStore` are
-the two seams meant for later phases. Swapping mock data for a real
-crypto market-data API means writing one new class that implements
-`MarketDataProvider` — nothing else in the pipeline changes. Swapping
-local storage for a real backend means writing one new class that
-implements `SignalStore`. `core/engine.ts` is the only file that wires
-concrete implementations together (`new MockMarketDataProvider()`,
-`new LocalSignalStore()`) — that's the one line phase 3 will change.
+**The two seams built for later phases:** `MarketDataProvider` and the stores.
+A different data source or a real backend means writing one new class against
+an existing interface — nothing downstream changes.
 
-```
-src/core/
-  types.ts                  Signal, SignalRecord, EntryZone, Timeframe, PerformanceSummary...
-  config.ts                 DATA_MODE ('SIMULATED' today), supported timeframes
-  assets.ts                 The 4 supported assets (BTC, ETH, SOL, BNB)
-  indicators.ts              SMA + rolling volatility helpers
+### Routes
 
-  data/
-    MarketDataProvider.ts     Interface: getCandles(asset, timeframe)
-    MockMarketDataProvider.ts Mock implementation (random-walk candle generator)
+| Route | What it is |
+|---|---|
+| `/` | Home — live ticker, signal stage, market pulse, next move, progression |
+| `/academy` | Academy — optional module library + knowledge check (gates nothing) |
+| `/arena` | Practice Arena — live chart, signal lifecycle, timers, paper trading |
+| `/performance` | Live paper-trading performance + virtual equity curve |
+| `/records` | Public, immutable signal record |
+| `/simulation` | The earlier multi-asset simulated dashboard, preserved |
 
-  strategies/
-    Strategy.ts                Interface: findSignals() + currentSignal()
-    smaCrossoverStrategy.ts    The SMA(10/30) crossover strategy
+## Experience model
 
-  signals/
-    SignalEngine.ts             Runs a Strategy over candles, records results
-    SignalStore.ts              Interface: record() / resolve() / list() / clear()
-    LocalSignalStore.ts         localStorage-backed implementation (in-memory fallback)
+Practice is never gated behind the Academy: `PRACTICE NOW` goes straight to the
+Arena from anywhere. The signal moves through a visible lifecycle —
+SCANNING → SETUP DETECTED → ACTIVE → EXPIRING → EXPIRED → RESULT — derived
+entirely from real engine state. `SCANNING` ("no valid setup") is presented as
+a legitimate outcome with its own panel and next-scan timer; no signal is ever
+fabricated to keep the screen busy.
 
-  performance/
-    PerformanceCalculator.ts   Win rate, avg win/loss, profit factor, max drawdown
+Progression (`src/core/progression`) awards XP only for **learning and
+discipline** — lessons, the knowledge check, reviewing a closed trade, and
+following the rules on a trade. There is deliberately no XP for number of
+trades, virtual profit, or time on site, and the training streak is kept alive
+by any training activity, so nobody is pushed to trade daily to protect a
+number.
 
-  engine.ts                  Wires the above together: buildMarketData()
+Motion is used only to report something real: a price flash fires on an actual
+tick, the countdown reflects the true window, the scan bar reports the engine
+cycling, and meters animate on genuine progress changes. Everything respects
+`prefers-reduced-motion`.
 
-src/components/    React UI, grouped by section (layout/market/signals/chart/stats/watchlist/pricing/common)
-src/utils/format.ts  Currency/percentage/date formatting helpers
-src/App.tsx          Loads market data (async) and composes the dashboard page
-```
+## Paper trading rules
 
-### The `Signal` and `SignalRecord` types
+The full execution model is documented in `src/core/paper/rules.ts`. Summary:
 
-A `Signal` is what a strategy produces: asset, timeframe, action
-(BUY/SELL/WAIT), an entry zone (not a single tick), target, stop,
-risk level, a 0-100 signal strength, the strategy's name, a timestamp,
-and reasoning text. A `SignalRecord` is a `Signal` that has been written
-to a `SignalStore`, with its outcome (`OPEN` / `WIN` / `LOSS`) — both
-wins and losses are always recorded, never filtered out of history.
+- **$10,000 virtual capital.** No deposits, withdrawals, or conversion to anything real.
+- **Sizing from risk:** `quantity = (equity × risk%) / |entry − invalidation|`. A wider stop means a *smaller* position.
+- **Max 2% risk per trade** — the engine refuses anything larger and explains why.
+- **Costs always run against you:** 0.10% fee per side, 0.02% spread, 0.05% slippage.
+- **Both-touched rule:** if one candle contains both the target and the invalidation, the order of events inside it is unknowable, so it always resolves as the **stop**. The ambiguity is never resolved in the strategy's favor.
+- **Late entries** (after signal expiry) still affect your virtual balance but are excluded from strategy statistics and recorded as a rule violation.
+
+## Data integrity
+
+Published signals are frozen at publication (`Object.freeze`), keyed by the
+candle that produced them, and republishing the same id is a no-op — a re-run
+can never restate a past signal. There is no delete or edit path for a signal
+or a trade anywhere in the API or the UI. Every statistic in the app is
+computed from stored records; none are hand-written.
 
 ## Run it locally
 
 ```bash
 npm install
-npm run dev
+npm run dev      # http://localhost:5173
 ```
-
-Then open the URL Vite prints (usually `http://localhost:5173`).
-
-Other scripts:
 
 ```bash
-npm run build    # type-check + production build (outputs to dist/)
-npm run preview  # preview the production build locally
-npm run lint      # run oxlint
+npm test         # vitest — core logic, incl. edge cases
+npm run build    # typecheck + production build
+npm run lint     # oxlint
 ```
 
-## Tech stack
+## Known limitations
 
-- React + TypeScript + Vite
-- Tailwind CSS v4
-- Recharts (price chart + sparklines)
-- lucide-react (icons)
+- **One market, one timeframe:** BTC/USDT on 1H, deliberately. The types and
+  provider already accept other timeframes.
+- **Polling, not streaming:** the feed polls every 20s. A WebSocket stream
+  would be the natural upgrade.
+- **Browser-local persistence:** signals, trades and progress live in
+  `localStorage`, so they are per-browser and not shared between devices.
+- **Paper trading is not real trading.** Real fills can be worse, spreads
+  widen in fast markets, and no simulator reproduces the pressure of risking
+  real money.
 
-## What's next
+## Not implemented (deliberately)
 
-- A `LiveMarketDataProvider` implementing `MarketDataProvider` against a
-  real crypto market-data API (the architecture is ready for this; it
-  is intentionally not built yet)
-- A second strategy (RSI, MACD, ...) implementing `Strategy`
-- An API-backed `SignalStore` implementation
-- Pro plan / payments (intentionally not built yet)
+Real-money trading, exchange/broker/wallet connections, deposits, withdrawals,
+order execution, leverage, futures, copy trading, payments, subscriptions, and
+affiliate links. The architecture leaves room for a live provider, more
+strategies, and user accounts — none of which are built yet.
